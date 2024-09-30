@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resultados del Modelo de Deserción</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
+      integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js"
+      integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      .container-fluid {
+        padding: 20px;
+      }
+
+      .centered-content {
+        text-align: center;
+        margin: 10px;
+      }
+
+      .centered-content img {
+        margin: 10px auto;
+        display: block;
+      }
+      .respuestas{
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-around;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        height: 400px;
+
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="centered-content">
+        <h1 class="text-center">Resultados del Modelo de Deserción</h1>
+        <button class="btn btn-outline-primary" onclick="importCSV('data')">
+          Importar data.csv
+        </button>
+        <button
+          class="btn btn-outline-primary"
+          onclick="importCSV('predictions')"
+        >
+          Importar predicciones.csv
+        </button>
+      </div>
+
+      <div class="centered-content mb-5">
+        <h2>Importancia de las Variables</h2>
+        <img src="model/importances.png" alt="Importancia de las Variables" />
+      </div>
+      <div id="prediccion" hidden class="centered-content mb-4">
+        <h1>Comparación de Predicciones</h1>
+        <canvas id="predictionsChart" width="800" height="300"></canvas>
+      </div>
+      <div id="chart" hidden class="centered-content">
+        <h1>Resultados de la Encuesta</h1>
+        <div id="charts-container" class="respuestas mb-2"></div>
+      </div>
+    </div>
+
+    <script>
+      function importCSV(type) {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = ".csv";
+        fileInput.onchange = () => {
+          const file = fileInput.files[0];
+          Papa.parse(file, {
+            header: true,
+            dynamicTyping: true,
+            complete: function (results) {
+              console.log(results.data);
+              if (type === "data") {
+                handleSurveyData(results.data);
+              } else if (type === "predictions") {
+                handlePredictionsData(results.data);
+              }
+            },
+          });
+        };
+        fileInput.click();
+      }
+
+      function handlePredictionsData(data) {
+        document.getElementById("prediccion").hidden = false;
+        let actualValues = data.map((row) => row["Actual"]);
+        let predictedValues = data.map((row) => row["Previsto"]);
+
+        const ctx = document
+          .getElementById("predictionsChart")
+          .getContext("2d");
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: Array.from(
+              { length: actualValues.length },
+              (_, i) => i + 1
+            ),
+            datasets: [
+              {
+                label: "Actual",
+                data: actualValues,
+                borderColor: "rgba(75, 192, 192, 1)",
+                backgroundColor: "rgba(75, 192, 192, 0.2)",
+                fill: false,
+                tension: 0.1,
+              },
+              {
+                label: "Previsto",
+                data: predictedValues,
+                borderColor: "rgba(255, 99, 132, 1)",
+                backgroundColor: "rgba(255, 99, 132, 0.2)",
+                fill: false,
+                tension: 0.1,
+              },
+            ],
+          },
+          options: {
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Muestra",
+                },
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "Valor",
+                },
+                beginAtZero: true,
+              },
+            },
+          },
+        });
+      }
+
+      function handleSurveyData(data) {
+        
+        if (data.length > 0 && Array.isArray(data)) {
+          const results = calculatePercentages(data);
+          renderCharts(results);
+        } else {
+          alert("El formato no es el correcto");
+        }
+      }
+
+      function calculatePercentages(data) {
+        
+        const questions = Object.keys(data[0]).slice(1);
+        const responses = data;
+
+        let results = questions.map((question) => {
+          let counts = {
+            "Totalmente de acuerdo": 0,
+            "De acuerdo": 0,
+            "En desacuerdo": 0,
+            "Totalmente en desacuerdo": 0,
+            "No corresponde": 0,
+          };
+          let totalResponses = 0;
+
+          responses.forEach((response) => {
+            const answer = response[question];
+            if (counts.hasOwnProperty(answer)) {
+              counts[answer]++;
+              totalResponses++;
+            }
+          });
+          for (let key in counts) {
+            counts[key] = (counts[key] / totalResponses) * 100;
+          }
+
+          return {
+            question,
+            counts,
+          };
+        });
+
+        return results;
+      }
+
+      function renderCharts(results) {
+        document.getElementById("chart").hidden = false;
+        const container = document.getElementById("charts-container");
+        container.innerHTML = "";
+
+        results.forEach((result) => {
+          const canvas = document.createElement("canvas");
+          container.appendChild(canvas);
+
+          new Chart(canvas, {
+            type: "bar",
+            data: {
+              labels: Object.keys(result.counts),
+              datasets: [
+                {
+                  label: `Pregunta: ${result.question}`,
+                  data: Object.values(result.counts),
+                  backgroundColor: [
+                    "rgba(75, 192, 192, 0.2)",
+                    "rgba(54, 132, 252, 0.2)",
+                    "rgba(255, 206, 86, 0.2)",
+                    "rgba(255, 99, 132, 0.2)",
+                    "rgba(153, 102, 255, 0.2)",
+                  ],
+                  borderColor: [
+                    "rgba(75, 192, 192, 1)",
+                    "rgba(54, 162, 235, 1)",
+                    "rgba(255, 206, 86, 1)",
+                    "rgba(255, 99, 132, 1)",
+                    "rgba(153, 102, 255, 1)",
+                  ],
+                  borderWidth: 1,
+                },
+              ],
+            },
+            options: {
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  max: 100,
+                  title: {
+                    display: true,
+                    text: "Porcentaje (%)",
+                  },
+                },
+              },
+            },
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
